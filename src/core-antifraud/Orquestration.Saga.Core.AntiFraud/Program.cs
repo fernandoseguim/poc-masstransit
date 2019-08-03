@@ -5,10 +5,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orquestration.Saga.Common;
 using Orquestration.Saga.Core.AntiFraud.Consumers;
+using Serilog;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
-using Serilog;
+using Orquestration.Saga.Contracts.Commands;
 
 namespace Orquestration.Saga.Core.AntiFraud
 {
@@ -17,7 +18,7 @@ namespace Orquestration.Saga.Core.AntiFraud
     {
         private static async Task Main()
         {
-            var host = new HostBuilder()
+            await new HostBuilder()
                 .ConfigureAppConfiguration((hostContext, builder) =>
                 {
                     builder
@@ -30,13 +31,15 @@ namespace Orquestration.Saga.Core.AntiFraud
                     var brokerSettings = new BrokerSettings();
                     hostContext.Configuration.GetSection("RabbitSettings").Bind(brokerSettings);
 
-                    services.AddScoped<IAnalyzeBankDepositTransactionRequestConsumer, AnalyzeBankDepositTransactionRequestConsumer>();
+                    services.AddSingleton<IConsumer<IAnalyzeBankDepositTransactionRequest>, AnalyzeBankDepositTransactionRequestConsumer>();
                     
                     services.AddMassTransit(configure =>
                     {
+                        configure.AddConsumer<AnalyzeBankDepositTransactionRequestConsumer>();
+
                         configure.AddBus(provider => Bus.Factory.CreateUsingRabbitMq(configureBus =>
                         {
-                            var hostBus = configureBus.Host(new Uri(brokerSettings.Host), "antifraud", configureHost =>
+                            var hostBus = configureBus.Host(new Uri(brokerSettings.Host), configureHost =>
                             {
                                 configureHost.Username(brokerSettings.User);
                                 configureHost.Password(brokerSettings.Password);
@@ -44,14 +47,18 @@ namespace Orquestration.Saga.Core.AntiFraud
 
                             configureBus.ReceiveEndpoint(hostBus, brokerSettings.InputQueue, configureEndpoint =>
                             {
-                                configureEndpoint.Consumer<IAnalyzeBankDepositTransactionRequestConsumer>(provider);
+                                configureEndpoint.Consumer<AnalyzeBankDepositTransactionRequestConsumer>(provider);
                             });
-                            
+
+                            //configureBus.ConfigureEndpoints(provider);
                             configureBus.UseSerilog();
+                            //configureBus.UseInMemoryOutbox();
                             //configureBus.MessageTopology.SetEntityNameFormatter(new CustomEntityFormatter("bankdeposit"));
                         }));
+
+                        //configure.AddRequestClient<IAnalyzeBankDepositTransactionRequest>();
                     });
-                    
+
                     services.AddMassTransitHostedService();
                 })
                 .ConfigureLogging((hostContext, configLogging) =>
@@ -63,9 +70,9 @@ namespace Orquestration.Saga.Core.AntiFraud
                         .SetMinimumLevel(LogLevel.Debug);
                 })
                 .UseConsoleLifetime()
-                .Build();
+                .Build().StartAsync();
 
-            await host.StartAsync();
+            
         }
     }
 }

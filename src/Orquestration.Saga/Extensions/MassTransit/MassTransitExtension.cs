@@ -48,7 +48,7 @@ namespace Orquestration.Saga.Extensions.MassTransit
                         configureEndpoint.StateMachineSaga(machine, repository);
                     });
 
-                    configureBus.UseInMemoryOutbox();
+                    //configureBus.UseInMemoryOutbox();
                     configureBus.UseSerilog();
                     //configureBus.MessageTopology.SetEntityNameFormatter(new CustomEntityFormatter("bankdeposit"));
                 }));
